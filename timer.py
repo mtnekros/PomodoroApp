@@ -62,6 +62,10 @@ class Timer:
         return self.__nPomodoros
 
     @staticmethod
+    def get_all_modes():
+        return Timer.POMODORO, Timer.SHORT_BREAK, Timer.LONG_BREAK
+
+    @staticmethod
     def format_time(time_in_secs):
         time_in_secs = math.ceil(time_in_secs)
         nMins = int(time_in_secs / 60)

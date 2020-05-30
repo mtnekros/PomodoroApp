@@ -1,6 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from threading import Thread
+import requests
+from datetime import datetime
+import json
 import winsound
 import os
 
@@ -9,42 +12,33 @@ from animated_shapes import CountDownRing, Ripples
 from message_modal import MessageModal
 from timer import Timer
 
-WIDTH = 380
-HEIGHT = 600
-CENTER_X = WIDTH / 2
-CENTER_Y = HEIGHT / 2 - 38
-MIN_RADIUS = 120
-MAX_RADIUS = 190
 PRIMARY_COLOR = '#fff'
 SECONDARY_COLOR = '#FA690E'
 BG_COLOR = '#F35D00'
 SOUND_FILE = f"{os.getcwd()}/sounds/bell.wav"
 
-start_btn_style = {
-    "font"             : ('Cabin Sketch', 22),
-    "foreground"       : SECONDARY_COLOR,
-    "activeforeground" : BG_COLOR,
-    "bg"               : PRIMARY_COLOR,
-    "activebackground" : "#F0E0D0",
-    "relief"           : "flat",
-    "borderwidth"      : 0,
-}
-stop_btn_style = {
-    "font"             :  ('Arial', 14, 'normal'),
-    "foreground"       : PRIMARY_COLOR,
-    "activeforeground" : PRIMARY_COLOR,
-    "bg"               : "#FD8234",
-    "activebackground" : SECONDARY_COLOR,
-    "relief"           : "flat",
-    "borderwidth"      : 0,
-}
+
+def quote_of_the_day():
+    try:
+        with open("quote-of-the-day.json", "r") as in_file:
+            quote = json.loads(in_file.read())
+
+        if quote["date"] != datetime.today().strftime("%Y-%m-%d"):
+            response = requests.get("https://quotes.rest/qod?language=en")
+            quote = response.json()["contents"]["quotes"][0]
+            with open("quote-of-the-day.json", "w") as out_file:
+                out_file.write(json.dumps(quote))
+        
+        return f"{quote['quote']}\n- {quote['author']}"
+    except :
+        return f"You can't always have quotes.\n- Pomodoro App"
 
 class PomodoroApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Pomodoro")
-        self.geometry(f"{WIDTH}x{HEIGHT}")
-        # self.wm_attributes('-alpha', 0.9)
+        self.geometry(f"{425}x{600}")
+        self.stage_radius = 168
         self.timer = Timer()
         self.set_up_canvas()
         self.create_widgets()
@@ -52,27 +46,30 @@ class PomodoroApp(tk.Tk):
         self.animate()
 
     def set_up_canvas(self):
-        cx, cy, min_r, max_r = CENTER_X, CENTER_Y, MIN_RADIUS, MAX_RADIUS
+        width,height = 425, 600
+        min_r, max_r = self.stage_radius - 10, self.stage_radius + 80
         self.canvas = AppCanvas(root=self, bg=BG_COLOR)
         self.canvas.place(relx=0, rely=0, relwidth=1, relheight=1)
         # geometries
-        self.ripples = Ripples(self.canvas, cx, cy, min_r, max_r, color=SECONDARY_COLOR, nRipples=2)
-        self.stage = self.canvas.create_circle(cx, cy, min_r+8, outline=SECONDARY_COLOR, fill=SECONDARY_COLOR)
-        self.timer_ring = CountDownRing(self.canvas, cx, cy, min_r, 8, PRIMARY_COLOR)
+        self.ripples = Ripples(self.canvas, 0, 0, min_r, max_r, color=SECONDARY_COLOR, nRipples=2)
+        self.stage = self.canvas.create_circle(0, 0, self.stage_radius, outline=SECONDARY_COLOR, fill=SECONDARY_COLOR)
+        self.timer_ring = CountDownRing(self.canvas, 0, 0, min_r, 8, PRIMARY_COLOR)
         # text
-        self.time_text = self.canvas.create_text(cx, cy, text="", font=("Helvetica", 45), fill=PRIMARY_COLOR)
+        self.time_text = self.canvas.create_text(0, 0, text="", font=("Helvetica", 54), fill=PRIMARY_COLOR)
+        self.quote = self.canvas.create_text(0, 0, anchor="s", text=quote_of_the_day(), justify="center", font=("Century Gothic", 10), fill="#FFF")
+
+        self.canvas.bind("<Configure>", lambda event: self.place_all_widgets())
+
+    def get_center(self):
+        return self.winfo_width()/2, self.winfo_height()/2 - 40;
 
     def create_widgets(self):
-        self.start_btn = tk.Button(self, text="START", command=self.handle_timer_start, **start_btn_style)
-        self.stop_btn = tk.Button(self, text="STOP", command=self.stop_timer, **stop_btn_style)
-
-        style = ttk.Style(self)
+        self.start_btn = ttk.Button(self, text="START", command=self.handle_timer_start)
+        self.stop_btn = ttk.Button(self, text="STOP", command=self.stop_timer)
         
-        style.configure("TMenubutton", foreground=BG_COLOR, background=PRIMARY_COLOR )
+        # style.configure("TMenubutton", foreground=BG_COLOR, relief="flat", background=PRIMARY_COLOR )
         self.mode_select_var = tk.StringVar(self)
-        options = [Timer.POMODORO, Timer.SHORT_BREAK, Timer.LONG_BREAK]
-        self.mode_select = ttk.OptionMenu(self, self.mode_select_var, self.timer.get_mode(), *options, command=self.change_mode)
-        self.mode_select.place(x=CENTER_X, y=CENTER_Y-45, anchor="center")
+        self.mode_select = ttk.OptionMenu(self, self.mode_select_var, self.timer.get_mode(), *Timer.get_all_modes(), command=self.change_mode)
 
     def change_mode(self, value):
         self.timer.set_mode(value)
@@ -81,19 +78,34 @@ class PomodoroApp(tk.Tk):
 
     def handle_timer_start(self):
         self.timer.start()
-        self.start_btn.place_forget()
+        self.place_all_widgets()
         self.canvas.itemconfig(self.time_text, state="normal")
         self.ripples.set_visible(True)
-        self.stop_btn.place(x=CENTER_X,y=HEIGHT-100, anchor='center', width=100, height=30)
+        self.start_btn.place_forget()
         winsound.PlaySound(SOUND_FILE, winsound.SND_ASYNC)
 
+    def place_all_widgets(self):
+        cx, cy = self.get_center()
+        self.timer_ring.translate(cx, cy)
+        self.canvas.coords(self.stage, self.canvas.get_bounds(cx, cy, self.stage_radius))
+        self.canvas.coords(self.time_text, cx, cy)
+        self.canvas.coords(self.quote, cx, self.winfo_height()-10)
+        self.canvas.itemconfig(self.quote, width=self.winfo_width()-20)
+        self.mode_select.place(x=cx, y=cy-70, anchor="center")
+        self.ripples.translate(cx, cy)
+        if self.timer.is_running():
+            self.stop_btn.place(x=cx, y=cy + self.stage_radius + 80, anchor="center")
+        else:
+            self.start_btn.place(x=cx, y=cy, anchor="center",width=145, height=35)
+            
     def stop_timer(self):
+        cx, cy = self.get_center()
         self.timer.stop()
         self.timer_ring.reset()
+        self.place_all_widgets()
         self.canvas.itemconfig(self.time_text, state="hidden")
         self.ripples.set_visible(False)
         self.stop_btn.place_forget()
-        self.start_btn.place(x=CENTER_X, y=CENTER_Y, anchor='center', width=145, height=35)
 
     def handle_time_up(self):
         self.timer_ring.reset()

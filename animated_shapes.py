@@ -1,4 +1,4 @@
-from utils import interpolate
+from helpers import interpolate
 
 class Ripple:
     def __init__(self, canvas, x, y, radius, min_radius, max_radius, min_width, max_width, outline, growth_rate):
@@ -25,13 +25,16 @@ class Ripple:
 
     def grow(self, dt):
         self.radius = self.radius + self.growth_rate * dt if self.radius < self.max_radius else self.min_radius
-        self.canvas.coords(self.id, *self.canvas.get_bounds(self.x, self.y, self.radius))
+        self.canvas.coords(self.id, self.canvas.get_bounds(self.x, self.y, self.radius))
         self.canvas.itemconfig(self.id, width=self.get_width())
 
     def set_visible(self, visible):
         state = "normal" if visible else "hidden"
         self.canvas.itemconfig(self.id, state=state)
 
+    def translate(self, new_x, new_y):
+        self.x = new_x
+        self.y = new_y
 
 class Ripples:
     def __init__(self, canvas, x, y, min_radius, max_radius, color, nRipples):
@@ -56,6 +59,10 @@ class Ripples:
         for ripple in self.ripples:
             ripple.set_visible(visible)
 
+    def translate(self, x, y):
+        for ripple in self.ripples:
+            ripple.translate(x, y)
+
 class CountDownRing:
     MAX_EXTENT = 359.99
     def __init__(self, canvas, x, y, radius, width, outline):
@@ -70,3 +77,8 @@ class CountDownRing:
 
     def reset(self):
         self.canvas.itemconfig(self.id, extent=CountDownRing.MAX_EXTENT)
+
+    def translate(self, new_x, new_y):
+        self.x = new_x
+        self.y = new_y
+        self.canvas.coords(self.id, self.canvas.get_bounds(self.x, self.y, self.radius))

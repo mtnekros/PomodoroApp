@@ -1,5 +1,4 @@
 import tkinter as tk
-import utils
 
 class AppCanvas(tk.Canvas):
     def __init__(self, root, **kwargs):
