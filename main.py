@@ -1,14 +1,13 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 from threading import Thread
-import requests
-from datetime import datetime
-import json
 import winsound
 import os
+from aggdraw import Pen, Brush, Dib
 
-from canvas import AppCanvas
-from animated_shapes import CountDownRing, Ripples
+from animated_shapes import CountDownRing
+from galaxy import Galaxy, DestructionCirle
+from helpers import from_rgb
 from message_modal import MessageModal
 from timer import Timer
 
@@ -17,124 +16,128 @@ SECONDARY_COLOR = '#FA690E'
 BG_COLOR = '#F35D00'
 SOUND_FILE = f"{os.getcwd()}/sounds/bell.wav"
 
-
-def quote_of_the_day():
-    try:
-        with open("quote-of-the-day.json", "r") as in_file:
-            quote = json.loads(in_file.read())
-
-        if quote["date"] != datetime.today().strftime("%Y-%m-%d"):
-            response = requests.get("https://quotes.rest/qod?language=en")
-            quote = response.json()["contents"]["quotes"][0]
-            with open("quote-of-the-day.json", "w") as out_file:
-                out_file.write(json.dumps(quote))
-        
-        return f"{quote['quote']}\n- {quote['author']}"
-    except :
-        return f"You can't always have quotes.\n- Pomodoro App"
+class Page:
+    HOME = "Home Page"
+    TIMER = "Timer Page"
+    SETTINGS = "Settings Page"
 
 class PomodoroApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Pomodoro")
         self.geometry(f"{425}x{600}")
-        self.stage_radius = 168
+        self.create_pages()
+        self.wm_attributes("-transparentcolor", "magenta")
+
+    def create_pages(self):
+        cx,cy = int(425/2), 300
+        self.pages = {
+            Page.TIMER: TimerFrame(self),
+            Page.HOME: tk.Frame(self),
+        }
+        for page in self.pages.values():
+            page.place(relwidth=1, relheight=1)
+
+        ttk.Button(self.pages[Page.HOME], text="Start Timer", command=self.start_timer).place(relx=0.5, rely=0.5, anchor="center")
+
+    def start_timer(self):
+        self.pages[Page.TIMER].start_timer()
+        self.show_page(Page.TIMER)
+        
+    def show_page(self, page):
+        self.pages[page].tkraise()
+
+class TimerFrame(tk.Frame):
+    def __init__(self, root, **kw):
+        super().__init__(root, bg="", **kw)
+        self.controller = root
+        self.bg_color = (30,30,30)
         self.timer = Timer()
-        self.set_up_canvas()
+        self.configure_styling()
+        self.set_up_animations()
         self.create_widgets()
-        self.stop_timer()
         self.animate()
+    
+    def configure_styling(self):
+        style = ttk.Style(self)
+        style.configure("TLabel", background=from_rgb(*self.bg_color), foreground="white")
+        style.configure("Time.TLabel", font=("Cookie", 50))
 
-    def set_up_canvas(self):
-        width,height = 425, 600
-        min_r, max_r = self.stage_radius - 10, self.stage_radius + 80
-        self.canvas = AppCanvas(root=self, bg=BG_COLOR)
-        self.canvas.place(relx=0, rely=0, relwidth=1, relheight=1)
-        # geometries
-        self.ripples = Ripples(self.canvas, 0, 0, min_r, max_r, color=SECONDARY_COLOR, nRipples=2)
-        self.stage = self.canvas.create_circle(0, 0, self.stage_radius, outline=SECONDARY_COLOR, fill=SECONDARY_COLOR)
-        self.timer_ring = CountDownRing(self.canvas, 0, 0, min_r, 8, PRIMARY_COLOR)
-        # text
-        self.time_text = self.canvas.create_text(0, 0, text="", font=("Helvetica", 54), fill=PRIMARY_COLOR)
-        self.quote = self.canvas.create_text(0, 0, anchor="s", text=quote_of_the_day(), justify="center", font=("Century Gothic", 10), fill="#FFF")
-
-        self.canvas.bind("<Configure>", lambda event: self.place_all_widgets())
-
-    def get_center(self):
-        return self.winfo_width()/2, self.winfo_height()/2 - 40;
+    def set_up_animations(self):
+        self.dib = Dib("RGB", (self.winfo_screenwidth(), self.winfo_screenheight()))
+        self.time_ring = CountDownRing(*self.get_ring_center(),150,7,"white",(50,50,50))
+        self.galaxy = Galaxy()
+        self.death_circle = DestructionCirle()
+        self.bind("<Button-1>", lambda event: self.death_circle.activate(event.x, event.y))
+        self.bind("<ButtonRelease-1>", lambda _: self.death_circle.execute_destruction(self.galaxy))
 
     def create_widgets(self):
-        self.start_btn = ttk.Button(self, text="START", command=self.handle_timer_start)
-        self.stop_btn = ttk.Button(self, text="STOP", command=self.stop_timer)
-        
-        # style.configure("TMenubutton", foreground=BG_COLOR, relief="flat", background=PRIMARY_COLOR )
-        self.mode_select_var = tk.StringVar(self)
-        self.mode_select = ttk.OptionMenu(self, self.mode_select_var, self.timer.get_mode(), *Timer.get_all_modes(), command=self.change_mode)
+        # creating time label
+        self.time_label_var = tk.StringVar(self,Timer.format_time(self.timer.get_duration()))
+        self.time_label = ttk.Label(self, textvariable=self.time_label_var,style="Time.TLabel")
+        self.time_label.place(relx=0.5, rely=0.4, anchor="center")
+        # creating start and stop btns
+        self.start_btn = ttk.Button(self, text="Reset", command=self.start_timer)
+        self.stop_btn = ttk.Button(self, text="Stop", command=self.stop_timer)
+        self.start_btn.place(relx=0.4, rely=0.8, x=-20, anchor="n", height=40, width=100)
+        self.stop_btn.place(relx=0.6, rely=0.8, x= +20, anchor="n", height=40, width=100)
+        # creating mode option menu
+        self.mode_var = tk.StringVar(self)
+        self.mode_selection = ttk.OptionMenu(self, self.mode_var, self.timer.get_mode(), *Timer.get_all_modes(), command=self.change_mode)
+        self.mode_selection.place(relx=0.5, rely=0.4, y=-60, anchor="center")
+    
+    def change_mode(self, selected_mode):
+        self.timer.set_mode(selected_mode)
+        self.start_timer()
 
-    def change_mode(self, value):
-        self.timer.set_mode(value)
-        if self.timer.is_running():
-            self.handle_timer_start()
-
-    def handle_timer_start(self):
+    def start_timer(self):
         self.timer.start()
-        self.place_all_widgets()
-        self.canvas.itemconfig(self.time_text, state="normal")
-        self.ripples.set_visible(True)
-        self.start_btn.place_forget()
-        winsound.PlaySound(SOUND_FILE, winsound.SND_ASYNC)
+        self.galaxy.explode_all_stars()
+        if self.timer.get_mode() != Timer.POMODORO:
+            self.show_break_msg()
 
-    def place_all_widgets(self):
-        cx, cy = self.get_center()
-        self.timer_ring.translate(cx, cy)
-        self.canvas.coords(self.stage, self.canvas.get_bounds(cx, cy, self.stage_radius))
-        self.canvas.coords(self.time_text, cx, cy)
-        self.canvas.coords(self.quote, cx, self.winfo_height()-10)
-        self.canvas.itemconfig(self.quote, width=self.winfo_width()-20)
-        self.mode_select.place(x=cx, y=cy-70, anchor="center")
-        self.ripples.translate(cx, cy)
-        if self.timer.is_running():
-            self.stop_btn.place(x=cx, y=cy + self.stage_radius + 80, anchor="center")
-        else:
-            self.start_btn.place(x=cx, y=cy, anchor="center",width=145, height=35)
-            
     def stop_timer(self):
-        cx, cy = self.get_center()
         self.timer.stop()
-        self.timer_ring.reset()
-        self.place_all_widgets()
-        self.canvas.itemconfig(self.time_text, state="hidden")
-        self.ripples.set_visible(False)
-        self.stop_btn.place_forget()
+        self.galaxy.reset()
+        self.controller.show_page(Page.HOME)
 
     def handle_time_up(self):
-        self.timer_ring.reset()
-        self.timer.handle_timer_completed()
-        next_mode = self.timer.get_mode()
-        self.mode_select_var.set( next_mode )
         winsound.PlaySound(SOUND_FILE, winsound.SND_ASYNC)
-        self.show_timer_complete_msg(next_mode)
+        self.timer.update_count()
+        next_mode = self.timer.set_next_mode()
+        self.mode_var.set(next_mode)
+        self.start_timer()
 
-    def show_timer_complete_msg(self, next_mode):
-        if next_mode == Timer.POMODORO:
-            title = "Focus"
-            msg = f"Focus on your task for the next 25 minutes.\nPomodoro No: {self.timer.getNPomodoros() + 1}"
-            duration = 5000 # ms
-        else:
-            title = "Break"
-            msg = f"Time to take a break."
-            duration = self.timer.get_duration() * 1000 # converting to miliseconds
-        Thread(target= lambda: MessageModal(title, msg, duration)).start()
+    def show_break_msg(self):
+        Thread(target=lambda: MessageModal(self.timer.get_duration(), self.timer)).start()
 
-    def animate(self):
-        dt = 10 # 10 ms
+    def get_ring_center(self):
+        return self.winfo_width()/2,  self.winfo_height() * 4/10
+
+    def update(self):
+        cx, cy = self.get_ring_center()
         if self.timer.is_running():
             time_left = self.timer.get_time_left()
-            self.timer_ring.update(time_left, self.timer.get_duration())
-            self.canvas.itemconfig(self.time_text, text=Timer.format_time( time_left ))
-            self.ripples.update(dt/1000)
+            self.galaxy.update(self.winfo_width(), self.winfo_height())
+            self.time_ring.update(time_left, self.timer.get_duration())
+            self.time_label_var.set( Timer.format_time(time_left) )
             if time_left < 0:
                 self.handle_time_up()
+        self.time_ring.translate(cx, cy)
+
+    def draw(self):
+        self.dib.rectangle((0,0,self.winfo_width(), self.winfo_height()), Pen(self.bg_color), Brush(self.bg_color))
+        self.galaxy.draw(self.dib)
+        self.death_circle.draw(self.dib)
+        self.time_ring.draw(self.dib)
+        self.dib.expose(hwnd=self.winfo_id())
+        self.death_circle.update()
+
+    def animate(self):
+        dt = 10
+        self.update()
+        self.draw()
         self.after(dt, func=lambda: self.animate())
 
-PomodoroApp().mainloop()
+app = PomodoroApp()
+app.mainloop()

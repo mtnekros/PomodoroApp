@@ -35,15 +35,18 @@ class Timer:
     def is_time_for_long_break(self):
         return self.__nPomodoros != 0 and self.__nPomodoros % 4 == 0
 
-    def handle_timer_completed(self):
+    def update_count(self):
         assert( self.get_time_left() < 0 )
         if self.__current_mode == Timer.POMODORO:
             self.__nPomodoros += 1
+
+    def set_next_mode(self):
+        if self.__current_mode == Timer.POMODORO:
             next_mode = Timer.LONG_BREAK if self.is_time_for_long_break() else Timer.SHORT_BREAK
         else:
             next_mode = Timer.POMODORO
         self.set_mode( next_mode )
-        self.start()
+        return next_mode
 
     def get_time_left(self):
         assert( self.is_running() and self.__start_time is not None )
