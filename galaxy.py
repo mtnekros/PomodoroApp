@@ -1,7 +1,7 @@
 import math
 import random
 from aggdraw import Pen, Brush, Dib
-from helpers import get_bounds, two_circles_overlap
+from helpers import get_bounds, two_circles_overlap, get_random_pt_in, point_in_bounds
 
 class SinFunction:
     def __init__(self, phase, del_theta, mean_value, amplitude):
@@ -30,9 +30,9 @@ class Star:
     IS_EXPLODING = "is exploding"
     IS_DEAD = "is dead"
 
-    def __init__(self, max_width, max_height):
-        self.x = random.random() * max_width
-        self.y = random.random() * max_height
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
         self.get_radius = SinFunction(
             phase=random.uniform(0,math.pi),
             amplitude=random.uniform(0.5,1.5),
@@ -137,9 +137,11 @@ class Galaxy:
     def death_condition_is_met(self):
         return random.random() < self.death_chance and len(self.stars) > self.min_n_stars_for_death
 
-    def update(self, width, height):
+    def update(self, spawn_bounds, restriction_bounds_list):
         if self.birth_condition_is_met():
-            self.stars.append( Star( width, height ) )
+            x,y = get_random_pt_in(spawn_bounds)
+            if all([ not point_in_bounds(x, y, bounds ) for bounds in restriction_bounds_list ]):
+                self.stars.append( Star( x,y ) )
 
         if self.death_condition_is_met():
             self.stars[0].explode()

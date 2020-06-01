@@ -1,6 +1,7 @@
 import json
 import requests
 from datetime import datetime
+import random
 
 def quote_of_the_day():
     try:
@@ -31,3 +32,27 @@ def from_rgb(r :int, g :int, b :int):
 def two_circles_overlap(x0, y0, r0, x1, y1, r1):
     distance_sq = (x1 - x0)**2 + (y1 - y0)**2
     return distance_sq <= (r0 + r1)**2
+
+def assert_bound_is_valid(bounds):
+    left,top,right,bottom = bounds
+    assert left <= right, f"invalid bounds. left: {left} right: {right}"
+    assert top <= bottom, f"invalid bounds. top: {top} bottom: {bottom}"
+
+def point_in_bounds(x,y,bounds):
+    assert_bound_is_valid( bounds )
+    left,top,right,bottom = bounds
+    return x >= left and x <= right and y >= top and y <= bottom
+
+def get_random_pt_in(bounds):
+    assert_bound_is_valid( bounds )
+    left,top,right,bottom = bounds
+    return random.uniform(left, right), random.uniform(top, bottom)
+
+def widget_bounds(widget, offset):
+    left, top = widget.winfo_x(), widget.winfo_y()
+    return (
+        left - offset,
+        top - offset,
+        left + widget.winfo_width() + offset,
+        top + widget.winfo_height() + offset
+    )

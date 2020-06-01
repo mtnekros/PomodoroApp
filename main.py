@@ -7,7 +7,7 @@ from aggdraw import Pen, Brush, Dib
 
 from animated_shapes import CountDownRing
 from galaxy import Galaxy, DestructionCirle
-from helpers import from_rgb
+from helpers import from_rgb, widget_bounds
 from message_modal import MessageModal
 from timer import Timer
 
@@ -43,6 +43,10 @@ class PomodoroApp(tk.Tk):
     def start_timer(self):
         self.pages[Page.TIMER].start_timer()
         self.show_page(Page.TIMER)
+
+    def bring_to_front(self):
+        self.wm_attributes("-topmost", True)
+        self.wm_attributes("-topmost", False)
         
     def show_page(self, page):
         self.pages[page].tkraise()
@@ -65,7 +69,7 @@ class TimerFrame(tk.Frame):
 
     def set_up_animations(self):
         self.dib = Dib("RGB", (self.winfo_screenwidth(), self.winfo_screenheight()))
-        self.time_ring = CountDownRing(*self.get_ring_center(),150,7,"white",(50,50,50))
+        self.time_ring = CountDownRing(*self.get_ring_center(),150,7,"white")
         self.galaxy = Galaxy()
         self.death_circle = DestructionCirle()
         self.bind("<Button-1>", lambda event: self.death_circle.activate(event.x, event.y))
@@ -91,6 +95,7 @@ class TimerFrame(tk.Frame):
         self.start_timer()
 
     def start_timer(self):
+        winsound.PlaySound(SOUND_FILE, winsound.SND_ASYNC)
         self.timer.start()
         self.galaxy.explode_all_stars()
         if self.timer.get_mode() != Timer.POMODORO:
@@ -102,10 +107,10 @@ class TimerFrame(tk.Frame):
         self.controller.show_page(Page.HOME)
 
     def handle_time_up(self):
-        winsound.PlaySound(SOUND_FILE, winsound.SND_ASYNC)
         self.timer.update_count()
         next_mode = self.timer.set_next_mode()
         self.mode_var.set(next_mode)
+        self.controller.bring_to_front()
         self.start_timer()
 
     def show_break_msg(self):
@@ -114,15 +119,23 @@ class TimerFrame(tk.Frame):
     def get_ring_center(self):
         return self.winfo_width()/2,  self.winfo_height() * 4/10
 
+    @property
+    def restriction_bounds_list(self):
+        widgets = [(self.start_btn, 10), (self.stop_btn, 10), (self.time_label, 35)]
+        return [widget_bounds(widget, offset) for widget,offset in widgets]
+
+    @property
+    def bounds(self):
+        return widget_bounds(self, offset=0)
+
     def update(self):
         cx, cy = self.get_ring_center()
-        if self.timer.is_running():
-            time_left = self.timer.get_time_left()
-            self.galaxy.update(self.winfo_width(), self.winfo_height())
-            self.time_ring.update(time_left, self.timer.get_duration())
-            self.time_label_var.set( Timer.format_time(time_left) )
-            if time_left < 0:
-                self.handle_time_up()
+        time_left = self.timer.get_time_left()
+        self.galaxy.update(self.bounds, self.restriction_bounds_list)
+        self.time_ring.update(time_left, self.timer.get_duration())
+        self.time_label_var.set( Timer.format_time(time_left) )
+        if time_left < 0:
+            self.handle_time_up()
         self.time_ring.translate(cx, cy)
 
     def draw(self):
@@ -135,8 +148,9 @@ class TimerFrame(tk.Frame):
 
     def animate(self):
         dt = 10
-        self.update()
-        self.draw()
+        if self.timer.is_running():
+            self.update()
+            self.draw()
         self.after(dt, func=lambda: self.animate())
 
 app = PomodoroApp()
