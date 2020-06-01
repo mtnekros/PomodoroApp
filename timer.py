@@ -9,6 +9,7 @@ class Timer:
     def __init__(self):
         self.__is_running = False
         self.__start_time = None
+        self.__paused_time = None
         self.__duration = {
             Timer.POMODORO: 25 * 60,
             Timer.SHORT_BREAK: 5 * 60,
@@ -24,9 +25,20 @@ class Timer:
     def get_mode(self):
         return self.__current_mode
 
-    def start(self):
+    def reset(self):
         self.__start_time = time.time()
+        self.__paused_time = None
         self.__is_running = True
+
+    def pause(self):
+        self.__paused_time = time.time()
+        self.__is_running = False
+
+    def resume(self):
+        assert self.__paused_time is not None, "Resuming an unpaused time. What???"
+        self.__is_running = True
+        self.__start_time = time.time() - (self.__paused_time - self.__start_time)
+        self.__paused_time = None
 
     def stop(self):
         self.__start_time = None
@@ -49,8 +61,12 @@ class Timer:
         return next_mode
 
     def get_time_left(self):
-        assert( self.is_running() and self.__start_time is not None )
-        return self.__duration[ self.__current_mode ] - (time.time() - self.__start_time)
+        assert( self.__start_time is not None )
+        duration = self.__duration[ self.__current_mode ]
+        if self.__paused_time is not None:
+            assert( not self.__is_running )
+            return duration - (self.__paused_time - self.__start_time)
+        return duration - (time.time() - self.__start_time)
 
     def get_duration(self):
         return self.__duration[ self.__current_mode ]
@@ -61,7 +77,7 @@ class Timer:
     def is_running(self):
         return self.__is_running
 
-    def getNPomodoros(self):
+    def get_pomodoro_count(self):
         return self.__nPomodoros
 
     @staticmethod

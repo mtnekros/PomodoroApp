@@ -27,20 +27,19 @@ class PomodoroApp(tk.Tk):
         self.title("Pomodoro")
         self.geometry(f"{425}x{600}")
         self.create_pages()
+        self.show_page(Page.HOME)
         self.wm_attributes("-transparentcolor", "magenta")
 
     def create_pages(self):
         cx,cy = int(425/2), 300
         self.pages = {
             Page.TIMER: TimerFrame(self),
-            Page.HOME: tk.Frame(self),
+            Page.HOME: StartFrame(self),
         }
         for page in self.pages.values():
             page.place(relwidth=1, relheight=1)
 
-        ttk.Button(self.pages[Page.HOME], text="Start Timer", command=self.start_timer).place(relx=0.5, rely=0.5, anchor="center")
-
-    def start_timer(self):
+    def go_to_timer_page(self):
         self.pages[Page.TIMER].start_timer()
         self.show_page(Page.TIMER)
 
@@ -48,19 +47,48 @@ class PomodoroApp(tk.Tk):
         self.wm_attributes("-topmost", True)
         self.wm_attributes("-topmost", False)
         
-    def show_page(self, page):
-        self.pages[page].tkraise()
+    def show_page(self, in_page):
+        for page in self.pages.values():
+            page.set_active(False)
+        self.pages[in_page].tkraise()
+        self.pages[in_page].set_active(True)
+
+
+class StartFrame(tk.Frame):
+    def __init__(self, root, *args, **kwargs):
+        super().__init__(root, *args, **kwargs)
+        self.is_active = False
+        # add start button
+        self.controller = root
+        ttk.Button(self, text="Start Timer", command=self.controller.go_to_timer_page).place(relx=0.5, rely=0.5, anchor="center", width=100, height=30)
+    
+    def set_active(self, active: bool):
+        self.is_active = active
+        
 
 class TimerFrame(tk.Frame):
     def __init__(self, root, **kw):
         super().__init__(root, bg="", **kw)
         self.controller = root
+        self.is_active = False
         self.bg_color = (30,30,30)
         self.timer = Timer()
         self.configure_styling()
         self.set_up_animations()
         self.create_widgets()
         self.animate()
+    
+    @property
+    def restriction_bounds_list(self):
+        widgets = [(self.play_pause_btn, 10), (self.stop_btn, 10), (self.time_label, 35)]
+        return [widget_bounds(widget, offset) for widget,offset in widgets]
+
+    @property
+    def bounds(self):
+        return widget_bounds(self, offset=0)
+
+    def set_active(self, active: bool):
+        self.is_active = active
     
     def configure_styling(self):
         style = ttk.Style(self)
@@ -81,10 +109,11 @@ class TimerFrame(tk.Frame):
         self.time_label = ttk.Label(self, textvariable=self.time_label_var,style="Time.TLabel")
         self.time_label.place(relx=0.5, rely=0.4, anchor="center")
         # creating start and stop btns
-        self.start_btn = ttk.Button(self, text="Reset", command=self.start_timer)
+        self.play_pause_var = tk.StringVar(self, "Pause")
+        self.play_pause_btn = ttk.Button(self, textvariable=self.play_pause_var, command=self.toggle_play)
         self.stop_btn = ttk.Button(self, text="Stop", command=self.stop_timer)
-        self.start_btn.place(relx=0.4, rely=0.8, x=-20, anchor="n", height=40, width=100)
-        self.stop_btn.place(relx=0.6, rely=0.8, x= +20, anchor="n", height=40, width=100)
+        self.play_pause_btn.place(relx=0.4, rely=0.8, x=-30, anchor="n", height=32, width=110)
+        self.stop_btn.place(relx=0.6, rely=0.8, x= +30, anchor="n", height=32, width=110)
         # creating mode option menu
         self.mode_var = tk.StringVar(self)
         self.mode_selection = ttk.OptionMenu(self, self.mode_var, self.timer.get_mode(), *Timer.get_all_modes(), command=self.change_mode)
@@ -94,14 +123,27 @@ class TimerFrame(tk.Frame):
         self.timer.set_mode(selected_mode)
         self.start_timer()
 
+    def toggle_play(self):
+        if self.timer.is_running():
+            self.timer.pause()
+        else:
+            self.timer.resume()
+        self.update_play_pause_var()
+
+    def update_play_pause_var(self):
+        self.play_pause_var.set( "Pause" if self.timer.is_running() else "Resume" )
+
     def start_timer(self):
         winsound.PlaySound(SOUND_FILE, winsound.SND_ASYNC)
-        self.timer.start()
+        self.timer.reset()
+        self.update_play_pause_var()
         self.galaxy.explode_all_stars()
         if self.timer.get_mode() != Timer.POMODORO:
             self.show_break_msg()
 
     def stop_timer(self):
+        self.timer.set_mode(Timer.POMODORO)
+        self.mode_var.set(Timer.POMODORO)
         self.timer.stop()
         self.galaxy.reset()
         self.controller.show_page(Page.HOME)
@@ -114,28 +156,20 @@ class TimerFrame(tk.Frame):
         self.start_timer()
 
     def show_break_msg(self):
-        Thread(target=lambda: MessageModal(self.timer.get_duration(), self.timer)).start()
+        Thread(target=lambda: MessageModal(self.timer)).start()
 
     def get_ring_center(self):
         return self.winfo_width()/2,  self.winfo_height() * 4/10
 
-    @property
-    def restriction_bounds_list(self):
-        widgets = [(self.start_btn, 10), (self.stop_btn, 10), (self.time_label, 35)]
-        return [widget_bounds(widget, offset) for widget,offset in widgets]
-
-    @property
-    def bounds(self):
-        return widget_bounds(self, offset=0)
-
     def update(self):
         cx, cy = self.get_ring_center()
-        time_left = self.timer.get_time_left()
         self.galaxy.update(self.bounds, self.restriction_bounds_list)
-        self.time_ring.update(time_left, self.timer.get_duration())
-        self.time_label_var.set( Timer.format_time(time_left) )
-        if time_left < 0:
-            self.handle_time_up()
+        if self.timer.is_running():
+            time_left = self.timer.get_time_left()
+            self.time_ring.update(time_left, self.timer.get_duration())
+            self.time_label_var.set( Timer.format_time(time_left) )
+            if time_left < 0:
+                self.handle_time_up()
         self.time_ring.translate(cx, cy)
 
     def draw(self):
@@ -148,7 +182,7 @@ class TimerFrame(tk.Frame):
 
     def animate(self):
         dt = 10
-        if self.timer.is_running():
+        if self.is_active:
             self.update()
             self.draw()
         self.after(dt, func=lambda: self.animate())
