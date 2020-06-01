@@ -3,25 +3,35 @@ from timer import Timer
 import time
 
 class MessageModal(Toplevel):
-    def __init__(self, life_time, timer):
+    is_already_open = False
+
+    def __init__(self, timer):
         super().__init__(bg="black")
-        # change opacity
-        self.wm_attributes("-alpha", 0.9)
-        self.wm_attributes("-transparentcolor", 'black')
-        # bring to top
-        self.attributes("-topmost", 1)
-        self.attributes("-topmost", 0)
-        # set fullscreen
-        self.attributes("-fullscreen", True)
-        self.focus_set()
         # add msg
+        self.set_up_modal_attributes()
+        if MessageModal.is_already_open:
+            self.destroy()
+            return
+        MessageModal.is_already_open = True
         self.__is_open = True
         self.timer = timer
+        self.timer_mode = timer.get_mode()
         self.create_widgets()
         # add event listeners for closing
         self.bind("<Escape>", lambda event: self.close())
         self.bind("<Motion>", lambda event: self.close())
         self.update()
+
+    def set_up_modal_attributes(self):
+        # change opacity
+        self.wm_attributes("-alpha", 0.9)
+        self.wm_attributes("-transparentcolor", 'black')
+        # bring to top
+        self.attributes("-topmost", True)
+        # self.attributes("-topmost", False)
+        # set fullscreen
+        self.attributes("-fullscreen", True)
+        self.focus_set()
 
     def create_widgets(self):
         self.frame = Frame(self,  bg="#111")
@@ -33,19 +43,20 @@ class MessageModal(Toplevel):
         caption.place(relx=.5, y=145, anchor="center")
     
     def update(self):
-        if self.__is_open and not self.timer.is_running():
+        if not self.timer.is_running():
             self.close()
         if self.__is_open:
             time_left = self.timer.get_time_left()
             self.time_label_var.set( Timer.format_time( time_left ) )
-            if self.timer.get_mode() == Timer.POMODORO:
+            if self.timer.get_mode() != self.timer_mode:
                 self.close()
             else:
-                self.after(100, self.update)
+                self.after(10, self.update)
 
     def close(self):
         if self.__is_open:
             self.__is_open = False
             self.unbind("<Escape>")
             self.unbind("<Motion>")
+            MessageModal.is_already_open = False
             self.destroy()
