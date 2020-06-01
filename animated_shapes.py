@@ -67,13 +67,13 @@ class ConcentricRipples:
 
 class CountDownRing:
     MAX_EXTENT = 360
-    def __init__(self, x, y, radius, width, color, shadow_color):
+    def __init__(self, x, y, radius, width, color):
         self.x = x
         self.y = y
         self.radius = radius
         self.extent = CountDownRing.MAX_EXTENT
-        self.pen = Pen(color, width=width)
-        self.shadow_pen = Pen(shadow_color, width=width)
+        self.pen = Pen(color, width=width, opacity=190)
+        self.shadow_pen = Pen(color, width=width, opacity=60)
 
     @property
     def bounds(self):
