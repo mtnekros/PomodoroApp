@@ -150,6 +150,7 @@ class TimerFrame(tk.Frame):
         self.timer.set_mode(Timer.POMODORO)
         self.mode_var.set(Timer.POMODORO)
         self.timer.stop()
+        self.break_msg.hide()
         self.galaxy.reset()
         self.controller.show_page(Page.HOME)
 
