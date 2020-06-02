@@ -26,15 +26,15 @@ class PomodoroApp(tk.Tk):
         super().__init__()
         self.title("Pomodoro")
         self.geometry(f"{425}x{600}")
+        self.minsize(320, 410)
         self.create_pages()
         self.show_page(Page.HOME)
-        self.wm_attributes("-transparentcolor", "magenta")
 
     def create_pages(self):
         cx,cy = int(425/2), 300
         self.pages = {
-            Page.TIMER: TimerFrame(self),
             Page.HOME: StartFrame(self),
+            Page.TIMER: TimerFrame(self),
         }
         for page in self.pages.values():
             page.place(relwidth=1, relheight=1)
@@ -93,7 +93,7 @@ class TimerFrame(tk.Frame):
     def configure_styling(self):
         style = ttk.Style(self)
         style.configure("TLabel", background=from_rgb(*self.bg_color), foreground="white")
-        style.configure("Time.TLabel", font=("Cookie", 50))
+        style.configure("Time.TLabel", font=("Cookie", 55))
 
     def set_up_animations(self):
         self.dib = Dib("RGB", (self.winfo_screenwidth(), self.winfo_screenheight()))
@@ -118,6 +118,9 @@ class TimerFrame(tk.Frame):
         self.mode_var = tk.StringVar(self)
         self.mode_selection = ttk.OptionMenu(self, self.mode_var, self.timer.get_mode(), *Timer.get_all_modes(), command=self.change_mode)
         self.mode_selection.place(relx=0.5, rely=0.4, y=-60, anchor="center")
+        # message modal
+        modal_should_close = lambda: not self.is_active or self.timer.get_mode() == Timer.POMODORO
+        self.break_msg = MessageModal(self, self.time_label_var, modal_should_close)
     
     def change_mode(self, selected_mode):
         self.timer.set_mode(selected_mode)
@@ -139,7 +142,9 @@ class TimerFrame(tk.Frame):
         self.update_play_pause_var()
         self.galaxy.explode_all_stars()
         if self.timer.get_mode() != Timer.POMODORO:
-            self.show_break_msg()
+            self.break_msg.show()
+        else:
+            self.break_msg.hide()
 
     def stop_timer(self):
         self.timer.set_mode(Timer.POMODORO)
@@ -154,9 +159,6 @@ class TimerFrame(tk.Frame):
         self.mode_var.set(next_mode)
         self.controller.bring_to_front()
         self.start_timer()
-
-    def show_break_msg(self):
-        Thread(target=lambda: MessageModal(self.timer)).start()
 
     def get_ring_center(self):
         return self.winfo_width()/2,  self.winfo_height() * 4/10
