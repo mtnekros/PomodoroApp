@@ -1,7 +1,8 @@
 import math
 import random
 from aggdraw import Pen, Brush, Dib
-from helpers import get_bounds, two_circles_overlap, get_random_pt_in, point_in_bounds
+from utils import get_bounds, two_circles_overlap, get_random_pt_in, point_in_bounds
+
 
 class SinFunction:
     def __init__(self, phase, del_theta, mean_value, amplitude):
@@ -24,6 +25,7 @@ class SinFunction:
         
     def __call__(self):
         return self.amplitude * math.sin(self.theta) + self.mean_value
+
 
 class Star:
     IS_HEALTHY = "is healthy"
@@ -77,6 +79,50 @@ class Star:
             dib.ellipse( self.bounds(self.radius), self.pen, self.brush )
         dib.ellipse( self.bounds(self.radius + self.glow_offset), self.pen, self.glow_brush )
 
+
+class Galaxy:
+    def __init__(self):
+        self.stars = []
+        self.birth_chance = 0.08
+        self.death_chance = 0.02
+        self.min_n_stars_for_death = 50
+        self.max_n_stars = 300
+
+    def birth_condition_is_met(self):
+        return random.random() < self.birth_chance and len(self.stars) < self.max_n_stars
+
+    def death_condition_is_met(self):
+        return random.random() < self.death_chance and len(self.stars) > self.min_n_stars_for_death
+
+    def update(self, spawn_bounds, restriction_bounds_list):
+        if self.birth_condition_is_met():
+            x,y = get_random_pt_in(spawn_bounds)
+            if all([ not point_in_bounds(x, y, bounds ) for bounds in restriction_bounds_list ]):
+                self.stars.append( Star( x,y ) )
+
+        if self.death_condition_is_met():
+            self.stars[0].explode()
+
+        for star in self.stars:
+            star.update()
+
+        self.stars = list(filter(lambda star: star.is_alive(), self.stars))
+
+    def draw(self, drawer):
+        for star in self.stars:
+            star.draw(drawer)
+
+    def get_stars(self):
+        return self.stars
+
+    def explode_all_stars(self):
+        for star in self.stars:
+            star.explode()
+
+    def reset(self):
+        self.stars = []
+
+
 class DestructionCirle:
     def __init__(self):
         self.__is_growing = False
@@ -122,45 +168,3 @@ class DestructionCirle:
         self.__is_growing = False
         self.__radius = 0
         self.__center = (0,0)
-
-class Galaxy:
-    def __init__(self):
-        self.stars = []
-        self.birth_chance = 0.08
-        self.death_chance = 0.02
-        self.min_n_stars_for_death = 50
-        self.max_n_stars = 300
-
-    def birth_condition_is_met(self):
-        return random.random() < self.birth_chance and len(self.stars) < self.max_n_stars
-
-    def death_condition_is_met(self):
-        return random.random() < self.death_chance and len(self.stars) > self.min_n_stars_for_death
-
-    def update(self, spawn_bounds, restriction_bounds_list):
-        if self.birth_condition_is_met():
-            x,y = get_random_pt_in(spawn_bounds)
-            if all([ not point_in_bounds(x, y, bounds ) for bounds in restriction_bounds_list ]):
-                self.stars.append( Star( x,y ) )
-
-        if self.death_condition_is_met():
-            self.stars[0].explode()
-
-        for star in self.stars:
-            star.update()
-
-        self.stars = list(filter(lambda star: star.is_alive(), self.stars))
-
-    def draw(self, drawer):
-        for star in self.stars:
-            star.draw(drawer)
-
-    def get_stars(self):
-        return self.stars
-
-    def explode_all_stars(self):
-        for star in self.stars:
-            star.explode()
-
-    def reset(self):
-        self.stars = []

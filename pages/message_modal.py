@@ -1,6 +1,5 @@
 from tkinter import Toplevel, Label, StringVar, Frame
 import tkinter as tk
-from timer import Timer
 import time
 
 class MessageModal(Toplevel):
